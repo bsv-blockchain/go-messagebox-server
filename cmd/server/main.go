@@ -25,6 +25,17 @@ import (
 	"github.com/bsv-blockchain/go-wallet-toolbox/pkg/wdk"
 )
 
+// @title           MessageBox Server API
+// @version         1.0.0
+// @description     API for message delivery, retrieval, acknowledgement and permissions. Uses BRC-31/BRC-104 mutual authentication.
+// @host      localhost:8080
+// @BasePath  /
+
+// @securityDefinitions.apikey  BSVAuth
+// @in header
+// @name x-bsv-auth-identity-key
+// @description BRC-31/BRC-104 mutual authentication. Requires multiple x-bsv-auth-* headers (identity-key, nonce, signature, etc.)
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
