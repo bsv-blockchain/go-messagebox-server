@@ -10,7 +10,19 @@ import (
 	"github.com/bsv-blockchain/go-messagebox-server/internal/logger"
 )
 
-// SetPermission handles POST /permissions/set.
+// SetPermission godoc
+// @Summary      Set a message permission
+// @Description  Sets fee requirements for receiving messages. Use recipientFee=0 for free, recipientFee=-1 to block, or a positive value for required payment in satoshis. Omit sender for box-wide defaults.
+// @Tags         Permissions
+// @Accept       json
+// @Produce      json
+// @Param        request body SetPermissionRequest true "Permission settings"
+// @Success      200  {object}  SetPermissionResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /permissions/set [post]
 func (s *Server) SetPermission(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -18,11 +30,7 @@ func (s *Server) SetPermission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Sender       *string `json:"sender,omitempty"`
-		MessageBox   string  `json:"messageBox"`
-		RecipientFee *int    `json:"recipientFee"`
-	}
+	var req SetPermissionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "ERR_INVALID_JSON", "Invalid JSON body")
 		return
@@ -77,13 +85,25 @@ func (s *Server) SetPermission(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, 200, map[string]string{
-		"status":      "success",
-		"description": description,
+	writeJSON(w, 200, SetPermissionResponse{
+		Status:      "success",
+		Description: description,
 	})
 }
 
-// GetPermission handles GET /permissions/get.
+// GetPermission godoc
+// @Summary      Get a message permission
+// @Description  Retrieves the permission setting for a specific sender or box-wide default for the authenticated identity.
+// @Tags         Permissions
+// @Produce      json
+// @Param        messageBox query string true "Name of the message box"
+// @Param        sender query string false "Sender's public key (omit for box-wide setting)"
+// @Success      200  {object}  GetPermissionResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /permissions/get [get]
 func (s *Server) GetPermission(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -129,21 +149,21 @@ func (s *Server) GetPermission(w http.ResponseWriter, r *http.Request) {
 			desc = fmt.Sprintf("Box-wide permission setting found for %s.", messageBox)
 		}
 
-		var senderVal any
+		var senderVal *string
 		if perm.Sender.Valid {
-			senderVal = perm.Sender.String
+			senderVal = &perm.Sender.String
 		}
 
-		writeJSON(w, 200, map[string]any{
-			"status":      "success",
-			"description": desc,
-			"permission": map[string]any{
-				"sender":       senderVal,
-				"messageBox":   messageBox,
-				"recipientFee": perm.RecipientFee,
-				"status":       status,
-				"createdAt":    perm.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
-				"updatedAt":    perm.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+		writeJSON(w, 200, GetPermissionResponse{
+			Status:      "success",
+			Description: desc,
+			Permission: &PermissionDetail{
+				Sender:       senderVal,
+				MessageBox:   messageBox,
+				RecipientFee: perm.RecipientFee,
+				Status:       status,
+				CreatedAt:    perm.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:    perm.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
 			},
 		})
 	} else {
@@ -153,14 +173,28 @@ func (s *Server) GetPermission(w http.ResponseWriter, r *http.Request) {
 		} else {
 			desc = fmt.Sprintf("No box-wide permission setting found for %s.", messageBox)
 		}
-		writeJSON(w, 200, map[string]any{
-			"status":      "success",
-			"description": desc,
+		writeJSON(w, 200, GetPermissionResponse{
+			Status:      "success",
+			Description: desc,
 		})
 	}
 }
 
-// ListPermissions handles GET /permissions/list.
+// ListPermissions godoc
+// @Summary      List message permissions
+// @Description  Returns all permission settings for the authenticated identity, optionally filtered by message box.
+// @Tags         Permissions
+// @Produce      json
+// @Param        messageBox query string false "Filter by message box name"
+// @Param        limit query int false "Maximum number of results (1-1000, default 100)"
+// @Param        offset query int false "Number of results to skip (default 0)"
+// @Param        createdAtOrder query string false "Sort order: 'asc' or 'desc' (default 'desc')"
+// @Success      200  {object}  ListPermissionsResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /permissions/list [get]
 func (s *Server) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -209,21 +243,13 @@ func (s *Server) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type permOut struct {
-		Sender       any    `json:"sender"`
-		MessageBox   string `json:"messageBox"`
-		RecipientFee int    `json:"recipientFee"`
-		CreatedAt    string `json:"createdAt"`
-		UpdatedAt    string `json:"updatedAt"`
-	}
-
-	var out []permOut
+	var out []PermissionDetail
 	for _, p := range perms {
-		var senderVal any
+		var senderVal *string
 		if p.Sender.Valid {
-			senderVal = p.Sender.String
+			senderVal = &p.Sender.String
 		}
-		out = append(out, permOut{
+		out = append(out, PermissionDetail{
 			Sender:       senderVal,
 			MessageBox:   p.MessageBox,
 			RecipientFee: p.RecipientFee,
@@ -233,17 +259,30 @@ func (s *Server) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if out == nil {
-		out = []permOut{}
+		out = []PermissionDetail{}
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":      "success",
-		"permissions": out,
-		"totalCount":  total,
+	writeJSON(w, 200, ListPermissionsResponse{
+		Status:      "success",
+		Permissions: out,
+		TotalCount:  total,
 	})
 }
 
-// GetQuote handles GET /permissions/quote.
+// GetQuote godoc
+// @Summary      Get a delivery quote
+// @Description  Returns fee information for sending a message to one or more recipients. Single recipient returns QuoteSingleResponse, multiple recipients returns QuoteMultiResponse.
+// @Tags         Permissions
+// @Produce      json
+// @Param        recipient query string true "Recipient public key (can be repeated for multiple recipients)"
+// @Param        messageBox query string true "Name of the message box"
+// @Success      200  {object}  QuoteSingleResponse "Single recipient quote"
+// @Success      200  {object}  QuoteMultiResponse "Multiple recipient quote"
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /permissions/quote [get]
 func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 	senderKey := getIdentityKey(r)
 	if senderKey == "" {
@@ -296,27 +335,18 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "ERR_INTERNAL", "An internal error has occurred.")
 			return
 		}
-		writeJSON(w, 200, map[string]any{
-			"status":      "success",
-			"description": "Message delivery quote generated.",
-			"quote": map[string]int{
-				"deliveryFee":  deliveryFee,
-				"recipientFee": recipientFee,
+		writeJSON(w, 200, QuoteSingleResponse{
+			Status:      "success",
+			Description: "Message delivery quote generated.",
+			Quote: QuoteSingle{
+				DeliveryFee:  deliveryFee,
+				RecipientFee: recipientFee,
 			},
 		})
 		return
 	}
 
-	// Multi-recipient
-	type quoteEntry struct {
-		Recipient    string `json:"recipient"`
-		MessageBox   string `json:"messageBox"`
-		DeliveryFee  int    `json:"deliveryFee"`
-		RecipientFee int    `json:"recipientFee"`
-		Status       string `json:"status"`
-	}
-
-	var quotes []quoteEntry
+	var quotes []QuoteEntry
 	var blockedRecipients []string
 	totalRecipientFees := 0
 	totalDeliveryFees := 0
@@ -339,7 +369,7 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 		}
 		totalDeliveryFees += deliveryFee
 
-		quotes = append(quotes, quoteEntry{
+		quotes = append(quotes, QuoteEntry{
 			Recipient:    rec,
 			MessageBox:   messageBox,
 			DeliveryFee:  deliveryFee,
@@ -348,15 +378,22 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":      "success",
-		"description": fmt.Sprintf("Message delivery quotes generated for %d recipients.", len(recipients)),
-		"quotesByRecipient": quotes,
-		"totals": map[string]int{
-			"deliveryFees":             totalDeliveryFees,
-			"recipientFees":            totalRecipientFees,
-			"totalForPayableRecipients": totalDeliveryFees + totalRecipientFees,
+	if quotes == nil {
+		quotes = []QuoteEntry{}
+	}
+	if blockedRecipients == nil {
+		blockedRecipients = []string{}
+	}
+
+	writeJSON(w, 200, QuoteMultiResponse{
+		Status:            "success",
+		Description:       fmt.Sprintf("Message delivery quotes generated for %d recipients.", len(recipients)),
+		QuotesByRecipient: quotes,
+		Totals: QuoteTotals{
+			DeliveryFees:              totalDeliveryFees,
+			RecipientFees:             totalRecipientFees,
+			TotalForPayableRecipients: totalDeliveryFees + totalRecipientFees,
 		},
-		"blockedRecipients": blockedRecipients,
+		BlockedRecipients: blockedRecipients,
 	})
 }

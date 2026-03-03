@@ -7,12 +7,19 @@ import (
 	"github.com/bsv-blockchain/go-messagebox-server/internal/logger"
 )
 
-// ListMessagesRequest is the expected JSON body for /listMessages.
-type ListMessagesRequest struct {
-	MessageBox string `json:"messageBox"`
-}
-
-// ListMessages handles POST /listMessages.
+// ListMessages godoc
+// @Summary      Retrieve messages from a message box
+// @Description  Returns all stored messages for the specified messageBox belonging to the authenticated identity. If the box does not exist or has no messages, an empty array is returned.
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Param        request body ListMessagesRequest true "Message box to list messages from"
+// @Success      200  {object}  ListMessagesResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /listMessages [post]
 func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -39,9 +46,9 @@ func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if mbID == 0 {
-		writeJSON(w, 200, map[string]any{
-			"status":   "success",
-			"messages": []any{},
+		writeJSON(w, 200, ListMessagesResponse{
+			Status:   "success",
+			Messages: []MessageOut{},
 		})
 		return
 	}
@@ -53,17 +60,9 @@ func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type messageOut struct {
-		MessageID string `json:"messageId"`
-		Body      string `json:"body"`
-		Sender    string `json:"sender"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-	}
-
-	var out []messageOut
+	var out []MessageOut
 	for _, m := range msgs {
-		out = append(out, messageOut{
+		out = append(out, MessageOut{
 			MessageID: m.MessageID,
 			Body:      m.Body,
 			Sender:    m.Sender,
@@ -73,11 +72,11 @@ func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if out == nil {
-		out = []messageOut{}
+		out = []MessageOut{}
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":   "success",
-		"messages": out,
+	writeJSON(w, 200, ListMessagesResponse{
+		Status:   "success",
+		Messages: out,
 	})
 }

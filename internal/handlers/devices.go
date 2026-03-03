@@ -7,14 +7,19 @@ import (
 	"github.com/bsv-blockchain/go-messagebox-server/internal/logger"
 )
 
-// RegisterDeviceRequest is the expected JSON body for /registerDevice.
-type RegisterDeviceRequest struct {
-	FCMToken string  `json:"fcmToken"`
-	DeviceID *string `json:"deviceId,omitempty"`
-	Platform *string `json:"platform,omitempty"`
-}
-
-// RegisterDevice handles POST /registerDevice.
+// RegisterDevice godoc
+// @Summary      Register a device for push notifications
+// @Description  Registers a device with an FCM token for receiving push notifications. Supports iOS, Android, and web platforms.
+// @Tags         Devices
+// @Accept       json
+// @Produce      json
+// @Param        request body RegisterDeviceRequest true "Device registration details"
+// @Success      200  {object}  RegisterDeviceResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /registerDevice [post]
 func (s *Server) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -46,14 +51,23 @@ func (s *Server) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":   "success",
-		"message":  "Device registered successfully for push notifications",
-		"deviceId": id,
+	writeJSON(w, 200, RegisterDeviceResponse{
+		Status:   "success",
+		Message:  "Device registered successfully for push notifications",
+		DeviceID: id,
 	})
 }
 
-// ListDevices handles GET /devices.
+// ListDevices godoc
+// @Summary      List registered devices
+// @Description  Returns all devices registered for push notifications for the authenticated identity.
+// @Tags         Devices
+// @Produce      json
+// @Success      200  {object}  ListDevicesResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /devices [get]
 func (s *Server) ListDevices(w http.ResponseWriter, r *http.Request) {
 	identityKey := getIdentityKey(r)
 	if identityKey == "" {
@@ -68,24 +82,13 @@ func (s *Server) ListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type deviceOut struct {
-		ID        int    `json:"id"`
-		DeviceID  *string `json:"deviceId"`
-		Platform  *string `json:"platform"`
-		FCMToken  string `json:"fcmToken"`
-		Active    bool   `json:"active"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-		LastUsed  string `json:"lastUsed,omitempty"`
-	}
-
-	var out []deviceOut
+	var out []DeviceOut
 	for _, d := range devices {
 		token := d.FCMToken
 		if len(token) > 10 {
 			token = "..." + token[len(token)-10:]
 		}
-		dev := deviceOut{
+		dev := DeviceOut{
 			ID:        d.ID,
 			FCMToken:  token,
 			Active:    d.Active,
@@ -106,11 +109,11 @@ func (s *Server) ListDevices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if out == nil {
-		out = []deviceOut{}
+		out = []DeviceOut{}
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":  "success",
-		"devices": out,
+	writeJSON(w, 200, ListDevicesResponse{
+		Status:  "success",
+		Devices: out,
 	})
 }

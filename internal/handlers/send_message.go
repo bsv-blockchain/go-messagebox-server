@@ -11,22 +11,20 @@ import (
 	"github.com/bsv-blockchain/go-messagebox-server/internal/logger"
 )
 
-// SendMessageRequest is the expected JSON body for /sendMessage.
-type SendMessageRequest struct {
-	Message *SendMessageBody `json:"message"`
-	Payment json.RawMessage  `json:"payment,omitempty"`
-}
-
-// SendMessageBody holds the message fields.
-type SendMessageBody struct {
-	Recipient  json.RawMessage `json:"recipient"`
-	Recipients json.RawMessage `json:"recipients,omitempty"`
-	MessageBox string          `json:"messageBox"`
-	MessageID  json.RawMessage `json:"messageId"`
-	Body       json.RawMessage `json:"body"`
-}
-
-// SendMessage handles POST /sendMessage.
+// SendMessage godoc
+// @Summary      Send a message to recipient(s)
+// @Description  Inserts a message into the target recipient's message box. Supports single or multiple recipients. Payment may be required depending on recipient's fee settings.
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Param        request body SendMessageRequest true "Message to send"
+// @Success      200  {object}  SendMessageResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      403  {object}  DeliveryBlockedError
+// @Failure      500  {object}  ErrorResponse
+// @Security     BSVAuth
+// @Router       /sendMessage [post]
 func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request) {
 	logger.Log("[DEBUG] Processing /sendMessage request...")
 
@@ -168,11 +166,11 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(blocked) > 0 {
-		writeJSON(w, 403, map[string]any{
-			"status":            "error",
-			"code":              "ERR_DELIVERY_BLOCKED",
-			"description":       fmt.Sprintf("Blocked recipients: %s", strings.Join(blocked, ", ")),
-			"blockedRecipients": blocked,
+		writeJSON(w, 403, DeliveryBlockedError{
+			Status:            "error",
+			Code:              "ERR_DELIVERY_BLOCKED",
+			Description:       fmt.Sprintf("Blocked recipients: %s", strings.Join(blocked, ", ")),
+			BlockedRecipients: blocked,
 		})
 		return
 	}
@@ -192,12 +190,7 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store messages
-	type result struct {
-		Recipient string `json:"recipient"`
-		MessageID string `json:"messageId"`
-	}
-	var results []result
+	var results []SendMessageResult
 	for i, fr := range feeRows {
 		mbID, err := s.DB.GetMessageBoxID(fr.recipient, boxType)
 		if err != nil {
@@ -231,12 +224,15 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		results = append(results, result{Recipient: fr.recipient, MessageID: msgID})
+		results = append(results, SendMessageResult{Recipient: fr.recipient, MessageID: msgID})
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"status":  "success",
-		"message": fmt.Sprintf("Your message has been sent to %d recipient(s).", len(results)),
-		"results": results,
+	if results == nil {
+		results = []SendMessageResult{}
+	}
+	writeJSON(w, 200, SendMessageResponse{
+		Status:  "success",
+		Message: fmt.Sprintf("Your message has been sent to %d recipient(s).", len(results)),
+		Results: results,
 	})
 }
