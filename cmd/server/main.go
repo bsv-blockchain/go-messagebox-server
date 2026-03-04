@@ -18,7 +18,9 @@ import (
 	"github.com/bsv-blockchain/go-messagebox-server/internal/firebase"
 	"github.com/bsv-blockchain/go-messagebox-server/internal/handlers"
 	"github.com/bsv-blockchain/go-messagebox-server/internal/logger"
+	ec "github.com/bsv-blockchain/go-sdk/primitives/ec"
 	sdk "github.com/bsv-blockchain/go-sdk/wallet"
+	sdkWallet "github.com/bsv-blockchain/go-sdk/wallet"
 	"github.com/bsv-blockchain/go-wallet-toolbox/pkg/defs"
 	"github.com/bsv-blockchain/go-wallet-toolbox/pkg/services"
 	"github.com/bsv-blockchain/go-wallet-toolbox/pkg/storage"
@@ -155,10 +157,52 @@ func createWallet(cfg *config.Config) (sdk.Interface, func(), error) {
 		network = defs.NetworkTestnet
 	}
 
+	if cfg.WalletStorageURL != "" {
+		return createWalletWithRemoteStorage(cfg, network)
+	}
+
+	return createWalletWithLocalStorage(cfg, network)
+}
+
+func createWalletWithRemoteStorage(cfg *config.Config, network defs.BSVNetwork) (sdk.Interface, func(), error) {
+	logger.Log("Initializing wallet with remote storage", "url", cfg.WalletStorageURL)
+
+	key, err := ec.PrivateKeyFromHex(cfg.ServerPrivateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse server private key: %w", err)
+	}
+
+	protoWallet, err := sdkWallet.NewCompletedProtoWallet(key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create proto wallet: %w", err)
+	}
+
+	storageClient, storageCleanup, err := storage.NewClient(cfg.WalletStorageURL, protoWallet)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create remote storage client: %w", err)
+	}
+
+	w, err := toolboxwallet.New(network, key, storageClient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create wallet with remote storage: %w", err)
+	}
+
+	// check if storage is up and running before continuing
+	if _, err := storageClient.MakeAvailable(context.Background()); err != nil {
+		storageCleanup()
+		return nil, nil, fmt.Errorf("failed to connect to remote storage: %w", err)
+	}
+
+	logger.Log("Wallet initialized successfully with remote storage")
+
+	return w, storageCleanup, nil
+}
+
+func createWalletWithLocalStorage(cfg *config.Config, network defs.BSVNetwork) (sdk.Interface, func(), error) {
+	logger.Log("Initializing wallet with local SQLite storage")
+
 	svcConfig := defs.DefaultServicesConfig(network)
 	walletServices := services.New(slog.Default(), svcConfig)
-
-	// TODO: support remote storage via cfg.WalletStorageURL using storage.NewClient
 
 	// Use local SQLite storage
 	dbConfig := defs.DefaultDBConfig()
@@ -187,6 +231,8 @@ func createWallet(cfg *config.Config) (sdk.Interface, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
+
+	logger.Log("Wallet initialized successfully with local storage")
 
 	return w, func() {
 		activeStorage.Stop()
