@@ -1,5 +1,3 @@
-> 📣 **Notice:** Discussion underway about consolidating this repository into the [go-stack monorepo](https://github.com/bsv-blockchain/go-stack). No archive decision has been made yet — please weigh in at [bsv-blockchain/roadmap discussion #70](https://github.com/bsv-blockchain/roadmap/discussions/70) before any change is made.
-
 # Go MessageBox Server
 
 A Go reimplementation of the [BSV MessageBox Server](https://github.com/bsv-blockchain/message-box-server), providing peer-to-peer message storage and delivery with BRC-31 (Authrite) authentication and BRC-29 payment support.
